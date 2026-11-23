@@ -1,0 +1,14 @@
+.terraform/
+*.tfstate
+*.tfstate.backup
+crash.log
+floci-data/
+node_modules/
+.venv/
+dist/
+test-results/
+playwright-report/
+__pycache__/
+*.py[cod]
+.env
+.env.*

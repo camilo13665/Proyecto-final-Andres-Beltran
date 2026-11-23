@@ -1,0 +1,25 @@
+{
+  "name": "aegisvolt",
+  "private": true,
+  "workspaces": [
+    "services/*",
+    "gateway",
+    "frontend"
+  ],
+  "scripts": {
+    "start:aegisvolt": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/start.ps1",
+    "stop:aegisvolt": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/stop.ps1",
+    "test": "npm run test --workspaces --if-present",
+    "build": "npm run build --workspaces --if-present",
+    "test:integration": "jest --runInBand --config=tests/integration/jest.config.cjs",
+    "test:e2e": "playwright test",
+    "demo": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/demo.ps1"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.65.1",
+    "yaml": "^2.9.1"
+  }
+}

@@ -1,0 +1,70 @@
+# Emulador local de AWS (Floci). Expone todos los servicios en http://localhost:4566
+services:
+  floci:
+    image: floci/floci:latest
+    container_name: aegisvolt-floci
+    ports:
+      - "4566:4566"
+    volumes:
+      # Persistencia local para que S3/DynamoDB sobrevivan a un reinicio del contenedor
+      - ./floci-data:/app/data
+
+  reservation:
+    build: ./services/station-reservation-service
+    ports: ["4001:4001"]
+    environment:
+      APP_ENV: dev
+      AWS_ENDPOINT_URL: http://floci:4566
+      AWS_REGION: us-east-1
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      PORT: 4001
+    depends_on: [floci]
+
+  billing:
+    build: ./services/billing-wallet-service
+    ports: ["4002:4002"]
+    environment:
+      APP_ENV: dev
+      AWS_ENDPOINT_URL: http://floci:4566
+      AWS_REGION: us-east-1
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      PORT: 4002
+    depends_on: [floci]
+
+  dispatch:
+    build: ./services/energy-dispatch-service
+    ports: ["4003:4003"]
+    environment:
+      APP_ENV: dev
+      AWS_ENDPOINT_URL: http://floci:4566
+      AWS_REGION: us-east-1
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      PORT: 4003
+    depends_on: [floci]
+
+  gateway:
+    build: ./gateway
+    ports: ["4000:4000"]
+    environment:
+      APP_ENV: dev
+      AWS_ENDPOINT_URL: http://floci:4566
+      AWS_REGION: us-east-1
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      PORT: 4000
+      RESERVATION_URL: http://reservation:4001
+      BILLING_URL: http://billing:4002
+      DISPATCH_URL: http://dispatch:4003
+    depends_on: [floci, reservation, billing, dispatch]
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_GRAPHQL_URL: http://localhost:4000/graphql
+        VITE_APP_ENV: dev
+    ports: ["5173:5173"]
+    depends_on: [gateway]

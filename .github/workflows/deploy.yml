@@ -1,0 +1,65 @@
+name: AegisVolt Deploy
+
+on:
+  push:
+    branches: [dev, test, prod]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: aegisvolt-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  terraform-and-canary:
+    name: deploy-${{ github.ref_name }}
+    runs-on: [self-hosted, windows, aegisvolt]
+    environment:
+      name: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure target environment
+        shell: bash
+        run: |
+          echo "APP_ENV=${GITHUB_REF_NAME}" >> "$GITHUB_ENV"
+          echo "TARGET_ENV=${GITHUB_REF_NAME}" >> "$GITHUB_ENV"
+
+      - name: Terraform apply target workspace
+        shell: bash
+        env:
+          AWS_ACCESS_KEY_ID: test
+          AWS_SECRET_ACCESS_KEY: test
+          AWS_REGION: us-east-1
+        run: |
+          cd infra/envs
+          terraform init -reconfigure
+          terraform workspace select "$TARGET_ENV"
+          terraform apply -auto-approve -input=false -var='enable_vpc_endpoints=false'
+
+      - name: Build application images
+        shell: bash
+        run: |
+          docker compose build gateway reservation billing dispatch frontend
+
+      - name: Load images and deploy Kustomize overlay
+        shell: bash
+        run: |
+          kind load docker-image --name aegisvolt aegisvolt-gateway:latest
+          kind load docker-image --name aegisvolt aegisvolt-reservation:latest
+          kind load docker-image --name aegisvolt aegisvolt-billing:latest
+          kind load docker-image --name aegisvolt-dispatch:latest
+          kubectl apply -k "k8s/overlays/${TARGET_ENV}"
+
+      - name: Wait for stable Deployments
+        shell: bash
+        run: |
+          kubectl -n "aegisvolt-${TARGET_ENV}" rollout status deployment/gateway-stable --timeout=180s
+          kubectl -n "aegisvolt-${TARGET_ENV}" rollout status deployment/station-reservation-stable --timeout=180s
+          kubectl -n "aegisvolt-${TARGET_ENV}" rollout status deployment/billing-wallet-stable --timeout=180s
+          kubectl -n "aegisvolt-${TARGET_ENV}" rollout status deployment/energy-dispatch-stable --timeout=180s
+
+      - name: Canary gateway
+        shell: bash
+        run: ./scripts/canary.sh gateway aegisvolt-gateway:latest

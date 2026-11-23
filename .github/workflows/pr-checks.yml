@@ -1,0 +1,114 @@
+name: AegisVolt PR Checks
+
+on:
+  pull_request:
+    branches: [dev, test, prod]
+
+permissions:
+  contents: read
+
+jobs:
+  lint-build:
+    name: lint-build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: docker build -t aegisvolt-gateway:test ./gateway
+
+  unit-tests:
+    name: unit-tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm test
+
+  integration-tests:
+    name: integration-tests
+    runs-on: ubuntu-latest
+    services:
+      floci:
+        image: floci/floci:latest
+        ports:
+          - 4566:4566
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Apply dev infrastructure
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+      - env:
+          AWS_ACCESS_KEY_ID: test
+          AWS_SECRET_ACCESS_KEY: test
+          AWS_REGION: us-east-1
+        run: |
+          cd infra/bootstrap
+          terraform init
+          terraform apply -auto-approve
+          cd ../envs
+          terraform init -reconfigure
+          terraform workspace select dev || terraform workspace new dev
+          terraform apply -auto-approve -var='enable_vpc_endpoints=false'
+      - env:
+          APP_ENV: dev
+          AWS_ENDPOINT_URL: http://localhost:4566
+        run: npm run seed --workspace gateway
+      - env:
+          APP_ENV: dev
+          AWS_ENDPOINT_URL: http://localhost:4566
+        run: npm run set-flags --workspace gateway
+
+  e2e-tests:
+    name: e2e-tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: docker compose up -d --build
+      - run: |
+          for i in $(seq 1 30); do
+            curl -fsS http://localhost:4000/health && exit 0
+            sleep 2
+          done
+          docker compose logs
+          exit 1
+      - run: curl -fsS http://localhost:4000/health
+
+  terraform-plan:
+    name: terraform-plan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+      - name: Select target workspace
+        env:
+          AWS_ACCESS_KEY_ID: test
+          AWS_SECRET_ACCESS_KEY: test
+          AWS_REGION: us-east-1
+          TARGET_ENV: ${{ github.base_ref }}
+        run: |
+          cd infra/envs
+          terraform init -reconfigure
+          terraform workspace select "$TARGET_ENV" || terraform workspace new "$TARGET_ENV"
+          terraform plan -input=false -var='enable_vpc_endpoints=false'

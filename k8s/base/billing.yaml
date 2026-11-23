@@ -1,0 +1,83 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: billing-wallet-stable
+  namespace: aegisvolt-dev
+spec:
+  replicas: 4
+  selector:
+    matchLabels:
+      app: billing-wallet
+      track: stable
+  template:
+    metadata:
+      labels:
+        app: billing-wallet
+        track: stable
+    spec:
+      containers:
+        - name: billing-wallet
+          image: aegisvolt-billing:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 4002
+          envFrom:
+            - configMapRef:
+                name: aegisvolt-config
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 4002
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 4002
+            initialDelaySeconds: 10
+            periodSeconds: 10
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: billing-wallet-canary
+  namespace: aegisvolt-dev
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: billing-wallet
+      track: canary
+  template:
+    metadata:
+      labels:
+        app: billing-wallet
+        track: canary
+    spec:
+      containers:
+        - name: billing-wallet
+          image: aegisvolt-billing:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 4002
+          envFrom:
+            - configMapRef:
+                name: aegisvolt-config
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 4002
+            initialDelaySeconds: 3
+            periodSeconds: 5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: billing-wallet
+  namespace: aegisvolt-dev
+spec:
+  selector:
+    app: billing-wallet
+  ports:
+    - port: 4002
+      targetPort: 4002

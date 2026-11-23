@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: aegisvolt-config
+  namespace: aegisvolt-dev
+data:
+  APP_ENV: dev
+  AWS_ENDPOINT_URL: http://host.docker.internal:4566
+  AWS_REGION: us-east-1
+  AWS_ACCESS_KEY_ID: test
+  AWS_SECRET_ACCESS_KEY: test
+  RESERVATION_URL: http://station-reservation:4001
+  BILLING_URL: http://billing-wallet:4002
+  DISPATCH_URL: http://energy-dispatch:4003
+  FLAG_CACHE_TTL_MS: "3000"
